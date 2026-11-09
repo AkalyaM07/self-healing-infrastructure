@@ -1,0 +1,35 @@
+groups:
+  - name: self_healing_infrastructure_alerts
+    rules:
+      - alert: NGINXDown
+        expr: probe_success{job="blackbox-http"} == 0
+        for: 5s
+        labels:
+          severity: critical
+          service: nginx
+          action: auto_recover
+        annotations:
+          summary: "NGINX service is down"
+          description: "Blackbox prober failed to reach NGINX web server at http://nginx:80. Automatic Ansible remediation is required."
+
+      - alert: HighCPUUsage
+        expr: (100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)) > 90
+        for: 30s
+        labels:
+          severity: warning
+          service: system
+          action: notify_only
+        annotations:
+          summary: "Host CPU utilization is critically high (>90%)"
+          description: "CPU usage on {{ $labels.instance }} has exceeded 90% for more than 30 seconds."
+
+      - alert: HighMemoryUsage
+        expr: ((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes) * 100 > 90
+        for: 30s
+        labels:
+          severity: warning
+          service: system
+          action: notify_only
+        annotations:
+          summary: "Host Memory utilization is high (>90%)"
+          description: "System memory consumption on {{ $labels.instance }} is exceeding 90% capacity."

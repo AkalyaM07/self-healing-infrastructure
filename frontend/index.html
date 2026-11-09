@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SELF-HEALING INFRASTRUCTURE | DevOps Control Plane</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-left">
+            <div class="logo-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+                </svg>
+            </div>
+            <div>
+                <h1 class="app-title">SELF-HEALING INFRASTRUCTURE</h1>
+                <p class="app-subtitle">Prometheus &bull; Alertmanager &bull; Ansible Automated Remediation</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <div id="infra-overall-pill" class="status-pill status-healthy">
+                <span class="status-dot"></span>
+                <span id="infra-status-text">SYSTEM HEALTHY</span>
+            </div>
+            <div class="refresh-indicator">
+                <span class="refresh-spinner" id="refresh-spinner"></span>
+                <span id="refresh-timer">Auto-refresh: 5s</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- Interactive Simulation Toolbar -->
+        <section class="simulation-banner">
+            <div class="simulation-info">
+                <h3>Interactive Demonstration & Failure Testing</h3>
+                <p>Simulate real infrastructure incidents to evaluate automated detection and Ansible self-healing.</p>
+            </div>
+            <div class="simulation-actions">
+                <button class="btn btn-danger" id="btn-stop-nginx" onclick="simulateStopNginx()">
+                    <span class="btn-icon">⚡</span> Kill / Stop NGINX
+                </button>
+                <button class="btn btn-warning" id="btn-cpu-stress" onclick="simulateCpuStress()">
+                    <span class="btn-icon">🔥</span> Simulate High CPU (>90%)
+                </button>
+                <button class="btn btn-primary" id="btn-run-ansible" onclick="triggerAnsibleManual()">
+                    <span class="btn-icon">🔧</span> Trigger Ansible Playbook
+                </button>
+                <button class="btn btn-outline" onclick="fetchDashboardData(true)">
+                    <span class="btn-icon">🔄</span> Refresh Now
+                </button>
+            </div>
+        </section>
+
+        <!-- Notification Banner / Alert Flash -->
+        <div id="live-incident-banner" class="incident-banner hidden">
+            <div class="incident-content">
+                <span class="incident-icon">⚠️</span>
+                <div>
+                    <strong id="incident-title">INCIDENT DETECTED</strong>
+                    <p id="incident-details">Blackbox prober failed for NGINX. Auto-recovery pipeline in progress...</p>
+                </div>
+            </div>
+            <span class="incident-badge">AUTOMATED RECOVERY ACTIVE</span>
+        </div>
+
+        <!-- Section A: Overview Dashboard Cards -->
+        <section class="section-container">
+            <h2 class="section-title">A. Overview Infrastructure Dashboard</h2>
+            <div class="metrics-grid-10">
+                <div class="card metric-card">
+                    <span class="metric-caption">System Status</span>
+                    <div class="metric-value-wrap">
+                        <span id="card-server-status" class="metric-highlight text-green">ONLINE</span>
+                    </div>
+                    <span class="metric-sub">Host Node / Docker Engine</span>
+                </div>
+
+                <div class="card metric-card">
+                    <span class="metric-caption">NGINX Service</span>
+                    <div class="metric-value-wrap">
+                        <span id="card-nginx-status" class="metric-highlight text-green">RUNNING</span>
+                    </div>
+                    <span id="card-nginx-source" class="metric-sub">HTTP 200 OK</span>
+                </div>
+
+                <div class="card metric-card">
+                    <span class="metric-caption">CPU Usage</span>
+                    <div class="metric-value-wrap">
+                        <span id="card-cpu-val" class="metric-highlight">0.0%</span>
+                    </div>
+                    <div class="progress-bar-bg"><div id="bar-cpu" class="progress-bar-fill" style="width: 0%;"></div></div>
+                </div>
+
+                <div class="card metric-card">
+                    <span class="metric-caption">Memory Usage</span>
+                    <div class="metric-value-wrap">
+                        <span id="card-mem-val" class="metric-highlight">0.0%</span>
+                    </div>
+                    <div class="progress-bar-bg"><div id="bar-mem" class="progress-bar-fill fill-purple" style="width: 0%;"></div></div>
+                </div>
+
+                <div class="card metric-card">
+                    <span class="metric-caption">Disk Usage</span>
+                    <div class="metric-value-wrap">
+                        <span id="card-disk-val" class="metric-highlight">0.0%</span>
+                    </div>
+                    <div class="progress-bar-bg"><div id="bar-disk" class="progress-bar-fill fill-cyan" style="width: 0%;"></div></div>
+                </div>
+
+                <div class="card metric-card">
+                    <span class="metric-caption">Website Availability</span>
+                    <div class="metric-value-wrap">
+                        <span id="card-web-avail" class="metric-highlight text-green">100% UP</span>
+                    </div>
+                    <span class="metric-sub">Blackbox Exporter Probe</span>
+                </div>
+
+                <div class="card metric-card">
+                    <span class="metric-caption">Total Alerts</span>
+                    <div class="metric-value-wrap">
+                        <span id="card-total-alerts" class="metric-highlight">0</span>
+                    </div>
+                    <span class="metric-sub">Prometheus &bull; Alertmanager</span>
+                </div>
+
+                <div class="card metric-card">
+                    <span class="metric-caption">Recoveries Succeeded</span>
+                    <div class="metric-value-wrap">
+                        <span id="card-success-rec" class="metric-highlight text-green">0</span>
+                    </div>
+                    <span class="metric-sub">Ansible Playbook verified</span>
+                </div>
+
+                <div class="card metric-card">
+                    <span class="metric-caption">Recoveries Failed</span>
+                    <div class="metric-value-wrap">
+                        <span id="card-failed-rec" class="metric-highlight text-red">0</span>
+                    </div>
+                    <span class="metric-sub">Exceptions or timeouts</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section B & C: Real-Time Charts & Service Health Monitoring -->
+        <div class="grid-2col">
+            <!-- Section B: Server Monitoring Charts -->
+            <section class="card chart-container-card">
+                <div class="card-header-flex">
+                    <div>
+                        <h2 class="card-title">B. Real-Time Resource Monitoring</h2>
+                        <p class="card-subtitle">Live system telemetry via Node Exporter and Prometheus (5s sampling)</p>
+                    </div>
+                    <div class="badge badge-pulse">LIVE 5s</div>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="resourceChart"></canvas>
+                </div>
+                <div class="chart-footer-metrics">
+                    <div class="footer-metric">
+                        <span class="footer-label">Network Inbound:</span>
+                        <span id="net-rx" class="footer-val">0.0 MB</span>
+                    </div>
+                    <div class="footer-metric">
+                        <span class="footer-label">Network Outbound:</span>
+                        <span id="net-tx" class="footer-val">0.0 MB</span>
+                    </div>
+                    <div class="footer-metric">
+                        <span class="footer-label">Scrape Interval:</span>
+                        <span class="footer-val">5.0s</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section C: Service Health Monitoring -->
+            <section class="card service-health-card">
+                <div class="card-header-flex">
+                    <div>
+                        <h2 class="card-title">C. Service Health & Target Probes</h2>
+                        <p class="card-subtitle">Blackbox Exporter synthetic HTTP checks and endpoints</p>
+                    </div>
+                    <div id="service-status-badge" class="badge badge-green">HEALTHY</div>
+                </div>
+
+                <div class="health-details-list">
+                    <div class="health-item">
+                        <div class="health-meta">
+                            <span class="health-title">NGINX Web Container</span>
+                            <span class="health-sub">Target: http://nginx:80 (Host Port 8080)</span>
+                        </div>
+                        <span id="health-nginx-badge" class="tag tag-success">HTTP 200 OK</span>
+                    </div>
+
+                    <div class="health-item">
+                        <div class="health-meta">
+                            <span class="health-title">Blackbox Prober</span>
+                            <span class="health-sub">Module: http_2xx | Preferred IPv4</span>
+                        </div>
+                        <span id="health-blackbox-badge" class="tag tag-success">PROBE SUCCESS</span>
+                    </div>
+
+                    <div class="health-item">
+                        <div class="health-meta">
+                            <span class="health-title">Last Health Probe</span>
+                            <span class="health-sub">Continuous active poll</span>
+                        </div>
+                        <span id="health-last-probe" class="health-val font-mono">--:--:--</span>
+                    </div>
+
+                    <div class="health-item">
+                        <div class="health-meta">
+                            <span class="health-title">Latest Incident Time</span>
+                            <span class="health-sub">Timestamp of last detected failure</span>
+                        </div>
+                        <span id="health-last-failure" class="health-val font-mono text-muted">None (Zero Downtime)</span>
+                    </div>
+
+                    <div class="health-item">
+                        <div class="health-meta">
+                            <span class="health-title">Remediation Engine</span>
+                            <span class="health-sub">Ansible Playbook `restart_nginx.yml`</span>
+                        </div>
+                        <span class="tag tag-cyan">AUTOMATED</span>
+                    </div>
+                </div>
+
+                <div class="service-preview-box">
+                    <span class="preview-label">NGINX Service Direct Link:</span>
+                    <a href="http://localhost:8080" target="_blank" class="preview-url">http://localhost:8080 ↗</a>
+                </div>
+            </section>
+        </div>
+
+        <!-- Section D: Alerts & Notifications -->
+        <section class="card section-container">
+            <div class="card-header-flex">
+                <div>
+                    <h2 class="card-title">D. Active Alerts & Notifications</h2>
+                    <p class="card-subtitle">Live events emitted by Prometheus and grouped by Alertmanager</p>
+                </div>
+                <span id="active-alerts-count" class="badge badge-blue">0 ALERTS</span>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Alert Name</th>
+                            <th>Severity</th>
+                            <th>Service</th>
+                            <th>Summary & Description</th>
+                            <th>Trigger Time</th>
+                            <th>Alert Status</th>
+                            <th>Recovery Routing</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alerts-table-body">
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">No active alerts firing. Infrastructure is healthy.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Section E: Automatic Recovery Logs -->
+        <section class="card section-container">
+            <div class="card-header-flex">
+                <div>
+                    <h2 class="card-title">E. Automatic Recovery History (SQLite Persistent)</h2>
+                    <p class="card-subtitle">Audited log of all self-healing actions executed by Ansible</p>
+                </div>
+                <span class="tag tag-blue">IDEMPOTENT AUTOMATION</span>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Event ID</th>
+                            <th>Service</th>
+                            <th>Failure Reason</th>
+                            <th>Detection Time</th>
+                            <th>Recovery Action</th>
+                            <th>Result</th>
+                            <th>Completion Time</th>
+                            <th>Logs</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recovery-table-body">
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">No automated recovery events recorded yet.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Section F: System Activity Timeline -->
+        <section class="card section-container">
+            <div class="card-header-flex">
+                <div>
+                    <h2 class="card-title">F. Complete System Activity Timeline</h2>
+                    <p class="card-subtitle">End-to-end audit trail of failure detection, webhook routing, and Ansible execution</p>
+                </div>
+                <span class="tag tag-purple">CHRONOLOGICAL AUDIT</span>
+            </div>
+            <div class="timeline-container" id="activity-timeline">
+                <!-- Timeline items populated dynamically -->
+            </div>
+        </section>
+
+        <!-- Section G: Project Information & Architecture -->
+        <section class="card section-container info-section">
+            <h2 class="card-title mb-4">G. About Project: Architecture & Technical Concepts</h2>
+            <div class="info-grid">
+                <div class="info-card">
+                    <h3>1. What is Self-Healing Infrastructure?</h3>
+                    <p>Self-healing infrastructure is an autonomous operations paradigm where systems continuously monitor their own health, detect faults (crashes, service outages, resource saturation), and apply automated remediation pipelines without requiring human operator intervention.</p>
+                </div>
+
+                <div class="info-card">
+                    <h3>2. Role of Prometheus</h3>
+                    <p>Prometheus acts as the time-series metric aggregation engine. It actively scrapes endpoints (Node Exporter for CPU/RAM/Disk, and Blackbox Exporter for synthetic HTTP probing) at configured 5s intervals and evaluates alerting rules like <code>NGINXDown</code> in real time.</p>
+                </div>
+
+                <div class="info-card">
+                    <h3>3. Role of Alertmanager</h3>
+                    <p>Alertmanager handles alert deduplication, grouping, rate-limiting, and smart routing. When <code>NGINXDown</code> fires, Alertmanager routes the payload to the FastAPI webhook receiver at <code>/webhook/alerts</code> while avoiding duplicate flap triggers.</p>
+                </div>
+
+                <div class="info-card">
+                    <h3>4. Role of Ansible Automation</h3>
+                    <p>Ansible executes declarative, idempotent playbooks (<code>restart_nginx.yml</code>). It inspects container state, safely restarts the failed service, verifies container runtime status, and performs an HTTP health check before confirming the recovery.</p>
+                </div>
+
+                <div class="info-card">
+                    <h3>5. The FastAPI Webhook Receiver</h3>
+                    <p>The Python FastAPI backend serves as the bridge between Alertmanager and Ansible. It validates the alert token, debounces duplicate requests, executes the playbook subprocess, logs outputs to SQLite, and updates the live web dashboard.</p>
+                </div>
+
+                <div class="info-card">
+                    <h3>6. Blackbox Exporter Health Checks</h3>
+                    <p>Unlike internal metrics, Blackbox Exporter performs external synthetic testing (HTTP GET <code>http://nginx:80</code>). Even if an NGINX container is running, if it returns 502/503 errors or hangs, Blackbox detects the failure immediately.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Execution Log Modal -->
+    <div id="log-modal" class="modal-backdrop hidden" onclick="closeLogModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div>
+                    <h3 id="modal-title">Ansible Execution Output</h3>
+                    <p id="modal-subtitle" class="font-mono text-muted">Event ID: --</p>
+                </div>
+                <button class="modal-close" onclick="closeLogModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre id="modal-log-text" class="log-pre">Loading execution output...</pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeLogModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="app-footer">
+        <p>Self-Healing Infrastructure &bull; Designed for DevOps Demonstration and Technical Evaluation &bull; Open Source</p>
+    </footer>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

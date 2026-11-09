@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production Web Service | ElevateLab</title>
+    <style>
+        :root {
+            --bg-color: #0b1120;
+            --card-bg: #1e293b;
+            --accent: #38bdf8;
+            --green: #22c55e;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        body {
+            background: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: var(--card-bg);
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--green);
+            border: 1px solid rgba(34, 197, 94, 0.4);
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 24px;
+        }
+        .pulse {
+            width: 10px;
+            height: 10px;
+            background: var(--green);
+            border-radius: 50%;
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 12px;
+        }
+        p {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-top: 24px;
+            text-align: left;
+        }
+        .metric-card {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid #334155;
+            padding: 16px;
+            border-radius: 10px;
+        }
+        .metric-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .metric-val {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin-top: 4px;
+        }
+        footer {
+            margin-top: 32px;
+            font-size: 0.8125rem;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="status-badge">
+            <div class="pulse"></div>
+            NGINX Web Service Online
+        </div>
+        <h1>ElevateLab Web Application</h1>
+        <p>This web service is actively monitored by Prometheus and Blackbox Exporter. If this server fails or is terminated, Alertmanager triggers an automated Ansible recovery pipeline.</p>
+        
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">Server Engine</div>
+                <div class="metric-val">NGINX / Linux</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Health Check Protocol</div>
+                <div class="metric-val">HTTP / 200 OK</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Monitoring Target</div>
+                <div class="metric-val">Blackbox Prober</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Auto-Healing Engine</div>
+                <div class="metric-val">Ansible Automation</div>
+            </div>
+        </div>
+
+        <footer>
+            Self-Healing Infrastructure &bull; Monitored via Prometheus &bull; Automated via Ansible
+        </footer>
+    </div>
+</body>
+</html>

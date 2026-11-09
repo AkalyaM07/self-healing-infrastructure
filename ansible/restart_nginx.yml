@@ -1,0 +1,101 @@
+---
+- name: Automated Self-Healing Recovery for NGINX Service
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    target_container: "nginx"
+    health_check_urls:
+      - "http://nginx:80"
+      - "http://127.0.0.1:8080"
+      - "http://localhost:8080"
+      - "http://127.0.0.1:80"
+
+  tasks:
+    - name: 1. Record recovery initiation timestamp
+      ansible.builtin.set_fact:
+        recovery_initiated_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+
+    - name: 2. Check if Docker CLI is available
+      ansible.builtin.command:
+        cmd: docker --version
+      register: docker_cli_check
+      failed_when: false
+      changed_when: false
+
+    - name: 3. Inspect NGINX container status
+      ansible.builtin.command:
+        cmd: "docker inspect --format '{{ '{{' }} .State.Status {{ '}}' }}' {{ target_container }}"
+      register: container_status
+      failed_when: false
+      changed_when: false
+      when: docker_cli_check.rc == 0
+
+    - name: 4. Log current container state
+      ansible.builtin.debug:
+        msg: "Target container '{{ target_container }}' current status: {{ container_status.stdout | default('unknown') }}"
+
+    - name: 5. Restart NGINX container
+      ansible.builtin.command:
+        cmd: "docker start {{ target_container }}"
+      register: restart_result
+      when:
+        - docker_cli_check.rc == 0
+        - container_status.stdout != 'running'
+      failed_when: restart_result.rc != 0
+
+    - name: 6. Restart NGINX if already running but unresponsive
+      ansible.builtin.command:
+        cmd: "docker restart {{ target_container }}"
+      register: restart_active_result
+      when:
+        - docker_cli_check.rc == 0
+        - container_status.stdout == 'running'
+
+    - name: 7. Fallback restart using system service if docker is not in use
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
+      when: docker_cli_check.rc != 0
+      ignore_errors: true
+
+    - name: 8. Pause briefly to allow NGINX socket initialization
+      ansible.builtin.pause:
+        seconds: 2
+
+    - name: 9. Verify container is now in running state
+      ansible.builtin.command:
+        cmd: "docker inspect --format '{{ '{{' }} .State.Running {{ '}}' }}' {{ target_container }}"
+      register: running_verify
+      failed_when: running_verify.rc != 0 or running_verify.stdout != 'true'
+      when: docker_cli_check.rc == 0
+
+    - name: 10. Perform post-restart HTTP health check
+      ansible.builtin.uri:
+        url: "{{ item }}"
+        method: GET
+        status_code: 200
+        timeout: 5
+      register: http_check
+      failed_when: false
+      loop: "{{ health_check_urls }}"
+
+    - name: 11. Evaluate health check results
+      ansible.builtin.set_fact:
+        health_passed: "{{ http_check.results | selectattr('status', 'equalto', 200) | list | length > 0 }}"
+
+    - name: 12. Fail playbook if health check did not pass
+      ansible.builtin.fail:
+        msg: "CRITICAL: NGINX was restarted but HTTP health check failed on all candidate endpoints!"
+      when: not health_passed
+
+    - name: 13. Output structured recovery summary
+      ansible.builtin.debug:
+        msg:
+          status: "RECOVERED"
+          service: "{{ target_container }}"
+          action: "docker_restart"
+          container_state: "running"
+          health_check: "HTTP 200 OK"
+          recovered_at: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"

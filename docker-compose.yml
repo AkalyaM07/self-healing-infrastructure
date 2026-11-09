@@ -1,0 +1,114 @@
+services:
+  # 1. Monitored Web Server
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/index.html:/usr/share/nginx/html/index.html:ro
+    networks:
+      - self_healing_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:80 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # 2. Host and Container Metrics Exporter
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    networks:
+      - self_healing_net
+
+  # 3. Synthetic Website Health Prober
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./blackbox/blackbox.yml:/config/blackbox.yml:ro
+    command:
+      - '--config.file=/config/blackbox.yml'
+    networks:
+      - self_healing_net
+
+  # 4. Metrics Aggregator & Alert Rule Evaluator
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - nginx
+      - node-exporter
+      - blackbox-exporter
+    networks:
+      - self_healing_net
+
+  # 5. Alert Routing & Deduplication Engine
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager:/etc/alertmanager:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    networks:
+      - self_healing_net
+
+  # 6. Self-Healing Webhook Controller, Ansible Runner & Dashboard Server
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PROMETHEUS_URL=http://prometheus:9090
+      - ALERTMANAGER_URL=http://alertmanager:9093
+      - NGINX_CHECK_URL=http://nginx:80
+      - DATABASE_PATH=/app/database/self_healing.db
+      - FRONTEND_DIR=/app/frontend
+      - ANSIBLE_DIR=/app/ansible
+    volumes:
+      # Docker socket mount allows Ansible to inspect & start NGINX container
+      # Security note: Restrict Docker socket access to local development/eval environments
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./database:/app/database
+      - ./logs:/app/logs
+      - ./ansible:/app/ansible
+    depends_on:
+      - nginx
+      - prometheus
+      - alertmanager
+    networks:
+      - self_healing_net
+
+networks:
+  self_healing_net:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+    driver: local

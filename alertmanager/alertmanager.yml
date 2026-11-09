@@ -1,0 +1,30 @@
+global:
+  resolve_timeout: 1m
+
+route:
+  group_by: ['alertname', 'service', 'severity']
+  group_wait: 2s
+  group_interval: 5s
+  repeat_interval: 1h
+  receiver: 'fastapi-webhook'
+  routes:
+    # Route for NGINX failure alerts requiring automated recovery
+    - match:
+        service: nginx
+        severity: critical
+      receiver: 'fastapi-webhook'
+      continue: false
+
+    # Route for System resource warnings (CPU, Memory) -> notification only
+    - match:
+        service: system
+      receiver: 'fastapi-webhook'
+      continue: false
+
+receivers:
+  - name: 'fastapi-webhook'
+    webhook_configs:
+      - url: 'http://backend:8000/webhook/alerts'
+        send_resolved: true
+        http_config:
+          follow_redirects: true
